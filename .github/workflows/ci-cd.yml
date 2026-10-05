@@ -32,7 +32,7 @@ jobs:
         run: python -m src.train
 
       - name: Quality gate (fail if the model is worse than the bar)
-        run: python -m src.evaluate --min-accuracy 0.85
+        run: python -m src.evaluate --min-accuracy 0.95
 
       - name: Unit + API tests
         run: pytest -q
