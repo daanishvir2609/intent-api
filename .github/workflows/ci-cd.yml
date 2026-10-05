@@ -1,0 +1,54 @@
+name: ci-cd
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Train the model
+        run: python -m src.train
+
+      - name: Quality gate (fail if the model is worse than the bar)
+        run: python -m src.evaluate --min-accuracy 0.85
+
+      - name: Unit + API tests
+        run: pytest -q
+
+      - name: Build the Docker image
+        run: docker build -t intent-api:ci .
+
+      - name: Smoke-test the container
+        run: |
+          docker run -d -p 8080:8080 --name api intent-api:ci
+          for i in $(seq 1 30); do curl -fsS localhost:8080/health && break; sleep 1; done
+          curl -fsS -X POST localhost:8080/predict \
+            -H "Content-Type: application/json" -d '{"text": "set an alarm for 7 am"}'
+
+      - name: Save the model that passed
+        uses: actions/upload-artifact@v7
+        with:
+          name: model
+          path: model/
